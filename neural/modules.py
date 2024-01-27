@@ -83,6 +83,10 @@ class Mlp(nn.Module):
             inputs = torch.cat([x, y], dim=-1)
             return inputs
 
+        def _mod_reshape_concat_input(x, y):
+            inputs = torch.cat([x, y], dim=-1)
+            return inputs
+
         def _reshape_input(x, y=None):
             return x.flatten(-2)
 
@@ -103,7 +107,8 @@ class Mlp(nn.Module):
         else:
             # if last element is not 0 -> y is passed, so reshape and concat
             self.input_dim_flat = np.prod(input_dim[:-1]) + input_dim[-1]
-            self._prepare_input = _reshape_concat_input
+            # self._prepare_input = _reshape_concat_input
+            self._prepare_input = _mod_reshape_concat_input
 
         self.output_dim_flat = np.prod(output_dim)
         self._prepare_output = _id if isinstance(output_dim, int) else _reshape_output
