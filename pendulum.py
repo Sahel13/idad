@@ -76,7 +76,7 @@ class SimplePendulum(nn.Module):
         q, dq = x[..., [0]], x[..., [1]]
         ddq = -9.81 * torch.sin(q) / l + u / (m * l ** 2)
         if len(dq.size()) == 1:
-            dq = torch.full(ddq.size(), dq.item())
+            dq = torch.full(ddq.size(), dq.item(), device=ddq.device)
         return torch.hstack([dq, ddq])
 
     def _simulator(self, x, u, theta):
