@@ -75,9 +75,10 @@ class SimplePendulum(nn.Module):
         m, l = [theta[..., [i]] for i in range(2)]
         q, dq = x[..., [0]], x[..., [1]]
         ddq = -9.81 * torch.sin(q) / l + u / (m * l ** 2)
-        if len(dq.size()) == 1:
-            dq = torch.full(ddq.size(), dq.item(), device=ddq.device)
-        return torch.hstack([dq, ddq])
+        if dq.size() != ddq.size():
+            # Add dimensions to dq
+            dq = dq.expand(ddq.size())
+        return torch.cat([dq, ddq], dim=-1)
 
     def _simulator(self, x, u, theta):
         euler_mean = x + self.dt * self.ode(x, u, theta)
@@ -99,6 +100,8 @@ class SimplePendulum(nn.Module):
 
         y_outcomes = []
         xi_designs = []
+        y = self.init_state
+
         for t in range(self.T):
             ####################################################################
             # Get a design xi
@@ -111,11 +114,7 @@ class SimplePendulum(nn.Module):
             ####################################################################
             # Sample y
             ####################################################################
-            if t > 0:
-                _sim = self._simulator(x=y_outcomes[-1], u=xi, theta=theta)
-            else:
-                _sim = self._simulator(x=self.init_state, u=xi, theta=theta)
-
+            _sim = self._simulator(x=y, u=xi, theta=theta)
             y = observation_sample(f"y{t + 1}", _sim)
             # y = observation_sample(f"y{t + 1}", self.simulator, xi, theta)
 
@@ -467,10 +466,10 @@ if __name__ == "__main__":
     parser.add_argument("--lr-critic", default=None, type=float)
     parser.add_argument("--gamma", default=0.96, type=float)
     parser.add_argument("--device", default="cuda", type=str)
-    parser.add_argument("--num-experiments", default=5, type=int)
+    parser.add_argument("--num-experiments", default=25, type=int)
     parser.add_argument("--hidden-dim", default=256, type=int)
     parser.add_argument("--encoding-dim", default=64, type=int)
-    parser.add_argument("--mi-estimator", default="InfoNCE", type=str)
+    parser.add_argument("--mi-estimator", default="sPCE", type=str)
     # cat, lstm (suitable for ts) or sum (suitable for iid)
     parser.add_argument(
         "--critic-arch", default="lstm", type=str, choices=["cat", "sum", "lstm"]
