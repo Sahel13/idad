@@ -21,23 +21,7 @@ from estimators.mi import PriorContrastiveEstimation
 
 
 from neural.modules import Mlp
-from neural.aggregators import (
-    PermutationInvariantImplicitDAD,
-    LSTMImplicitDAD,
-    ConcatImplicitDAD,
-)
-from neural.baselines import (
-    ConstantBatchBaseline,
-    BatchDesignBaseline,
-    RandomDesignBaseline,
-)
-from neural.critics import CriticDotProd, CriticBA
-
-mi_estimator_options = {
-    "NWJ": NWJ,
-    "InfoNCE": InfoNCE,
-    "sPCE": PriorContrastiveEstimation
-}
+from neural.aggregators import LSTMImplicitDAD
 
 class SimplePendulum(nn.Module):
     """
@@ -48,21 +32,18 @@ class SimplePendulum(nn.Module):
             self,
             design_net,
             device,
-            T,
-            dt = 0.05,
-            scale = 2.5,
-            shift = 0.0
+            T
     ):
         super(SimplePendulum, self).__init__()
         self.p = 2
         self.design_net = design_net
         self.T = T
-        self.dt = dt
-        self.cov = torch.diag(torch.tensor([0.001, dt], device=device))
-        self.scale = scale
-        self.shift = shift
+        self.dt = 0.05
+        self.cov = torch.diag(torch.tensor([1e-8, 5e-4], device=device))
+        self.scale = 2.5
+        self.shift = 0.0
         self.log_theta_prior = dist.MultivariateNormal(
-            torch.tensor([0.3, 0.3], device=device), torch.diag(torch.tensor([0.4, 0.4], device=device))
+            torch.tensor([0.0, 0.0], device=device), torch.diag(torch.tensor([0.01, 0.01], device=device))
         )
         self.init_state = torch.tensor([0.0, 0.0], device=device)
 
@@ -195,7 +176,6 @@ def train_model(
     T,
     hidden_dim,
     encoding_dim,
-    mi_estimator,
     mlflow_experiment_name
 ):
     pyro.clear_param_store()
@@ -216,7 +196,6 @@ def train_model(
     mlflow.log_param("num_steps", num_steps)
     mlflow.log_param("hidden_dim", hidden_dim)
     mlflow.log_param("encoding_dim", encoding_dim)
-    mlflow.log_param("mi_estimator", mi_estimator)
     # ----------------------------------------------------------------------------------
 
     ###################################################################################
@@ -253,7 +232,7 @@ def train_model(
 
     def separate_learning_rate(module_name, param_name):
         if module_name == "critic_net":
-            return {"lr": lr_critic}
+            return {"lr": lr}
         elif module_name == "design_net":
             return {"lr": lr}
         else:
@@ -338,17 +317,16 @@ def train_model(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="iDAD: SDE-Based Pendulum Model")
-    parser.add_argument("--num-steps", default=100000, type=int)
+    parser.add_argument("--num-steps", default=50000, type=int)
     parser.add_argument("--num-batch-samples", default=512, type=int)
-    parser.add_argument("--num-negative-samples", default=63, type=int)
+    parser.add_argument("--num-negative-samples", default=1023, type=int)
     parser.add_argument("--seed", default=-1, type=int)
     parser.add_argument("--lr", default=0.0005, type=float)
     parser.add_argument("--gamma", default=0.96, type=float)
-    parser.add_argument("--device", default="cuda", type=str)
-    parser.add_argument("--num-experiments", default=25, type=int)
+    parser.add_argument("--device", default="cuda:1", type=str)
+    parser.add_argument("--num-experiments", default=50, type=int)
     parser.add_argument("--hidden-dim", default=256, type=int)
     parser.add_argument("--encoding-dim", default=64, type=int)
-    parser.add_argument("--mi-estimator", default="sPCE", type=str)
     parser.add_argument("--mlflow-experiment-name", default="pendulum", type=str)
     args = parser.parse_args()
 
@@ -363,6 +341,5 @@ if __name__ == "__main__":
         T=args.num_experiments,
         hidden_dim=args.hidden_dim,
         encoding_dim=args.encoding_dim,
-        mi_estimator=args.mi_estimator,
         mlflow_experiment_name=args.mlflow_experiment_name
     )
