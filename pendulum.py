@@ -48,7 +48,7 @@ class SimplePendulum(nn.Module):
             self,
             design_net,
             device,
-            T = 25,
+            T,
             dt = 0.05,
             scale = 2.5,
             shift = 0.0
@@ -190,16 +190,13 @@ def train_model(
     num_negative_samples,
     seed,
     lr,
-    lr_critic,
     gamma,
     device,
     T,
     hidden_dim,
     encoding_dim,
-    critic_arch,
     mi_estimator,
-    mlflow_experiment_name,
-    design_arch,
+    mlflow_experiment_name
 ):
     pyro.clear_param_store()
 
@@ -210,39 +207,15 @@ def train_model(
     #####
     n = 2 # Output dim
     design_dim = 1
-    latent_dim = 2
     observation_dim = n
-
-    if lr_critic is None:
-        lr_critic = lr
-    # Design emitter hidden layer
-    des_emitter_HD = encoding_dim // 2
-
-    # History encoder is applied to encoding of both design and critic networks.
-    hist_encoder_HD = [8, 64, hidden_dim]
-
-    # These are for critic only:
-    latent_encoder_HD = [8, 64, hidden_dim]
-    hist_enc_critic_head_HD = encoding_dim // 2
-
-    mlflow.log_param("HD_hist_encoder", str(hist_encoder_HD))
-    mlflow.log_param("HD_des_emitter", str(des_emitter_HD))
-    mlflow.log_param("HD_latent_encoder", str(latent_encoder_HD))
-    mlflow.log_param("HD_hist_enc_critic_head", str(hist_enc_critic_head_HD))
 
     mlflow.log_param("seed", seed)
     mlflow.log_param("num_experiments", T)
     mlflow.log_param("lr", lr)
-    mlflow.log_param("lr_critic", lr_critic)
     mlflow.log_param("gamma", gamma)
     mlflow.log_param("num_steps", num_steps)
     mlflow.log_param("hidden_dim", hidden_dim)
     mlflow.log_param("encoding_dim", encoding_dim)
-
-    mlflow.log_param("critic_arch", critic_arch)
-    mlflow.log_param("lr_critic", lr_critic)
-
-    mlflow.log_param("design_arch", design_arch)
     mlflow.log_param("mi_estimator", mi_estimator)
     # ----------------------------------------------------------------------------------
 
@@ -252,107 +225,25 @@ def train_model(
     ### DESIGN NETWORK ###
     history_encoder = Mlp(
         input_dim=[design_dim, observation_dim],
-        hidden_dim=hist_encoder_HD,  # hidden_dim,
+        hidden_dim=[hidden_dim, hidden_dim],  # hidden_dim,
         output_dim=encoding_dim,
         activation=nn.ReLU(),
         name="policy_history_encoder",
     )
     design_emitter = Mlp(
         # iDAD only -> options are sum or cat
-        input_dim=encoding_dim * max((T - 1), 1)
-        if design_arch == "cat"
-        else encoding_dim,
-        hidden_dim=des_emitter_HD,
+        input_dim=encoding_dim,
+        hidden_dim=[hidden_dim, hidden_dim],
         output_dim=design_dim,
         activation=nn.ReLU(),
         name="policy_design_emitter",
     )
-    if design_arch == "lstm":
-        # iDAD LSTM aggregator
-        design_net = LSTMImplicitDAD(
-            history_encoder,
-            design_emitter,
-            empty_value=torch.zeros(design_dim, device=device),
-            num_hidden_layers=2,
-        ).to(device)
-    elif design_arch == "random":
-        # Random baseline
-        # no design net, can be independent or TS
-        design_net = RandomDesignBaseline(
-            design_dim,
-            random_designs_dist=torch.distributions.Uniform(
-                torch.tensor(-5.0, device=device), torch.tensor(5.0, device=device)
-            ),
-        ).to(device)
-    elif design_arch == "equal_interval":
-        # Equal interval baseline
-        linspace = torch.linspace(0.01, 0.99, T, dtype=torch.float32)
-        mlflow.log_param("init_design", str(list(linspace.numpy())))
-        transformed_designs = linspace.to(device).unsqueeze(1)
-        const_designs = torch.log(transformed_designs / (1 - transformed_designs))
-        design_net = ConstantBatchBaseline(const_designs=const_designs).to(device)
-    elif design_arch == "static":
-        # Static baseline
-        # can be independent or TS
-        design_net = BatchDesignBaseline(
-            T=T,
-            design_dim=design_dim,
-            design_init=torch.distributions.Uniform(
-                torch.tensor(-5.0, device=device), torch.tensor(5.0, device=device)
-            ),
-        )
-        mlflow.log_param("init_design", "u(-5, 5)")
-
-    ######## CRITIC NETWORK #######
-    ## Latent encoder
-    critic_latent_encoder = Mlp(
-        input_dim=latent_dim,
-        hidden_dim=latent_encoder_HD,
-        output_dim=encoding_dim,
-        activation=nn.ReLU(),
-        name="critic_latent_encoder",
-    )
-    ## History encoder
-    critic_design_obs_encoder = Mlp(
-        input_dim=[design_dim, observation_dim],
-        hidden_dim=hist_encoder_HD,
-        output_dim=encoding_dim,
-        name="critic_design_obs_encoder",
-    )
-    critic_head = Mlp(
-        input_dim=encoding_dim * T if critic_arch == "cat" else encoding_dim,
-        hidden_dim=hist_enc_critic_head_HD,
-        output_dim=encoding_dim,
-        activation=nn.ReLU(),
-        name="critic_head",
-    )
-
-    if critic_arch == "cat":
-        critic_history_encoder = ConcatImplicitDAD(
-            encoder_network=critic_design_obs_encoder,
-            emission_network=critic_head,
-            empty_value=torch.ones(n, latent_dim, device=device),
-            T=T,
-        )
-    elif critic_arch == "lstm":
-        critic_history_encoder = LSTMImplicitDAD(
-            encoder_network=critic_design_obs_encoder,
-            emission_network=critic_head,
-            empty_value=torch.ones(n, latent_dim, device=device),
-            num_hidden_layers=2,
-        )
-    elif critic_arch == "sum":
-        critic_history_encoder = PermutationInvariantImplicitDAD(
-            encoder_network=critic_design_obs_encoder,
-            emission_network=critic_head,
-            empty_value=torch.ones(n, latent_dim, device=device),
-        )
-    else:
-        raise ValueError("Invalid critic_arch")
-
-    critic_net = CriticDotProd(
-        history_encoder_network=critic_history_encoder,
-        latent_encoder_network=critic_latent_encoder,
+    # iDAD LSTM aggregator
+    design_net = LSTMImplicitDAD(
+        history_encoder,
+        design_emitter,
+        empty_value=torch.zeros(design_dim, device=device),
+        num_hidden_layers=2,
     ).to(device)
 
     #######################################################################
@@ -382,19 +273,11 @@ def train_model(
         }
     )
 
-    if mi_estimator == "sPCE":
-        mi_loss_instance = PriorContrastiveEstimation(
-            model=pendulum.model,
-            batch_size=batch_size,
-            num_negative_samples=num_negative_samples,
-        )
-    else:
-        mi_loss_instance = mi_estimator_options[mi_estimator](
-            model=pendulum.model,
-            critic=critic_net,
-            batch_size=batch_size,
-            num_negative_samples=num_negative_samples,
-        )
+    mi_loss_instance = PriorContrastiveEstimation(
+        model=pendulum.model,
+        batch_size=batch_size,
+        num_negative_samples=num_negative_samples,
+    )
 
     mlflow.log_param("num_negative_samples", mi_loss_instance.num_negative_samples)
     mlflow.log_param("num_batch_samples", mi_loss_instance.batch_size)
@@ -413,7 +296,6 @@ def train_model(
     def count_parameters(model):
         return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-    mlflow.log_param("num_params_criticnet", count_parameters(critic_net))
     mlflow.log_param("num_params_designnet", count_parameters(design_net))
 
     for i in num_steps_range:
@@ -445,8 +327,6 @@ def train_model(
     # store params, metrics and artifacts to mlflow ------------------------------------
     print("Storing model to MlFlow... ", end="")
     mlflow.pytorch.log_model(pendulum.cpu(), "model")
-    print("Storing critic network to MlFlow... ", end="")
-    mlflow.pytorch.log_model(critic_net.cpu(), "critic")
 
     ml_info = mlflow.active_run().info
     model_loc = f"mlruns/{ml_info.experiment_id}/{ml_info.run_id}/artifacts"
@@ -463,26 +343,12 @@ if __name__ == "__main__":
     parser.add_argument("--num-negative-samples", default=63, type=int)
     parser.add_argument("--seed", default=-1, type=int)
     parser.add_argument("--lr", default=0.0005, type=float)
-    parser.add_argument("--lr-critic", default=None, type=float)
     parser.add_argument("--gamma", default=0.96, type=float)
     parser.add_argument("--device", default="cuda", type=str)
     parser.add_argument("--num-experiments", default=25, type=int)
     parser.add_argument("--hidden-dim", default=256, type=int)
     parser.add_argument("--encoding-dim", default=64, type=int)
     parser.add_argument("--mi-estimator", default="sPCE", type=str)
-    # cat, lstm (suitable for ts) or sum (suitable for iid)
-    parser.add_argument(
-        "--critic-arch", default="lstm", type=str, choices=["cat", "sum", "lstm"]
-    )
-    # iDAD: <sum> or <lstm>
-    # Baselines: choice between  <static>, <equal_interval> and <random>
-    parser.add_argument(
-        "--design-arch",
-        default="lstm",
-        type=str,
-        choices=["sum", "lstm", "static", "equal_interval", "random"],
-    )
-
     parser.add_argument("--mlflow-experiment-name", default="pendulum", type=str)
     args = parser.parse_args()
 
@@ -492,14 +358,11 @@ if __name__ == "__main__":
         num_negative_samples=args.num_negative_samples,
         seed=args.seed,
         lr=args.lr,
-        lr_critic=args.lr_critic,
         gamma=args.gamma,
         device=args.device,
         T=args.num_experiments,
         hidden_dim=args.hidden_dim,
         encoding_dim=args.encoding_dim,
-        critic_arch=args.critic_arch,
         mi_estimator=args.mi_estimator,
-        mlflow_experiment_name=args.mlflow_experiment_name,
-        design_arch=args.design_arch,
+        mlflow_experiment_name=args.mlflow_experiment_name
     )
