@@ -39,7 +39,7 @@ class Cartpole(nn.Module):
         self.scale = 5.0
         self.shift = 0.0
         self.log_theta_prior = dist.MultivariateNormal(
-            torch.tensor([0.2, 0.2], device=device), torch.diag(torch.tensor([0.04, 0.04], device=device))
+            torch.zeros(3, device=device), torch.diag((0.01 * torch.ones(3, device=device)))
         )
         self.init_state = torch.zeros(4, device=device)
 
@@ -49,24 +49,31 @@ class Cartpole(nn.Module):
         Should be able to deal with any permutation of
         single or batched `x`, `u` and `theta`.
         """
-        _mc = 2.0
-        _l, _mp = [theta[..., [i]] for i in range(2)]
-        _g = 9.81
+        l, mp, mc = [theta[..., [i]] for i in range(3)]
+        g = 9.81
 
-        _, q, ds, dq = [x[..., [i]] for i in range(4)]
+        c, k = 1e-2, 1e-2
+        d, v = 1e-2, 1e-2
+
+        s, q, ds, dq = [x[..., [i]] for i in range(4)]
 
         sin_q = torch.sin(q)
         cos_q = torch.cos(q)
 
         dds = (
-                      u + _mp * sin_q * (_l * dq**2 + _g * cos_q)
-              ) / (_mc + _mp * sin_q**2)
+            u
+            - (c * ds + k * s)
+            - (d * dq + v * q) * cos_q / l
+            + mp * sin_q * (l * dq**2 + g * cos_q)
+        ) / (mc + mp * sin_q**2)
 
         ddq = (
-                      - u * cos_q
-                      - _mp * _l * dq**2 * cos_q * sin_q
-                      - (_mc + _mp) * _g * sin_q
-              ) / (_l * _mc + _l * _mp * sin_q**2)
+           - u * cos_q
+           - mp * l * dq**2 * cos_q * sin_q
+           - (mc + mp) * g * sin_q
+           - (c * ds + k * s) * cos_q
+           - (d * dq + v * q) * cos_q**2 / l
+        ) / (l * mc + l * mp * sin_q**2)
 
         if dq.size() != ddq.size():
             # Add dimensions to dq
@@ -335,7 +342,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="iDAD: SDE-Based Pendulum Model")
     parser.add_argument("--num-steps", default=50000, type=int)
     parser.add_argument("--num-batch-samples", default=512, type=int)
-    parser.add_argument("--num-negative-samples", default=1023, type=int)
+    parser.add_argument("--num-negative-samples", default=4095, type=int)
     parser.add_argument("--seed", default=-1, type=int)
     parser.add_argument("--lr", default=0.0005, type=float)
     parser.add_argument("--gamma", default=0.96, type=float)
