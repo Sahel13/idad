@@ -28,11 +28,12 @@ class LinearPendulum(nn.Module):
     def __init__(
             self,
             design_net,
-            device
+            device,
+            T
     ):
         super(LinearPendulum, self).__init__()
         self.design_net = design_net
-        self.T = 50
+        self.T = T
         self.dt = 0.05
         self.scale = 2.5
         self.shift = 0.0
@@ -163,6 +164,7 @@ def train_model(
     lr,
     gamma,
     device,
+    T,
     hidden_dim,
     encoding_dim,
     mlflow_experiment_name
@@ -258,7 +260,7 @@ def train_model(
     # num_steps_range = trange(1, num_steps + 1, desc="Loss: 0.000 ")
     num_steps_range = trange(0, num_steps + 0, desc="Loss: 0.000 ")
     # Evaluate model and store designs for this latent:
-    test_theta = torch.tensor([1.0, 1.5], device=device).unsqueeze(0)
+    test_theta = torch.tensor([10.0, 0.0, 5.0], device=device).unsqueeze(0)
 
     ### Log params:
     def count_parameters(model):
@@ -313,6 +315,7 @@ if __name__ == "__main__":
     parser.add_argument("--lr", default=0.0005, type=float)
     parser.add_argument("--gamma", default=0.96, type=float)
     parser.add_argument("--device", default="cuda:0", type=str)
+    parser.add_argument("--num-experiments", default=50, type=int)
     parser.add_argument("--hidden-dim", default=256, type=int)
     parser.add_argument("--encoding-dim", default=64, type=int)
     parser.add_argument("--mlflow-experiment-name", default="pendulum", type=str)
@@ -325,6 +328,7 @@ if __name__ == "__main__":
         seed=args.seed,
         lr=args.lr,
         gamma=args.gamma,
+        T=args.num_experiments,
         device=args.device,
         hidden_dim=args.hidden_dim,
         encoding_dim=args.encoding_dim,

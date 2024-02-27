@@ -292,7 +292,7 @@ def train_model(
     # num_steps_range = trange(1, num_steps + 1, desc="Loss: 0.000 ")
     num_steps_range = trange(0, num_steps + 0, desc="Loss: 0.000 ")
     # Evaluate model and store designs for this latent:
-    test_log_theta = torch.tensor([1.0, 1.5], device=device).log().unsqueeze(0)
+    test_log_theta = torch.tensor([1.0, 1.0, 1.0], device=device).log().unsqueeze(0)
 
     ### Log params:
     def count_parameters(model):
