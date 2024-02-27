@@ -318,7 +318,7 @@ if __name__ == "__main__":
     parser.add_argument("--num-experiments", default=50, type=int)
     parser.add_argument("--hidden-dim", default=256, type=int)
     parser.add_argument("--encoding-dim", default=64, type=int)
-    parser.add_argument("--mlflow-experiment-name", default="pendulum", type=str)
+    parser.add_argument("--mlflow-experiment-name", default="pendulum_linear", type=str)
     args = parser.parse_args()
 
     train_model(
