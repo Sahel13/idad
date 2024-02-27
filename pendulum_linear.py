@@ -41,7 +41,7 @@ class LinearPendulum(nn.Module):
             torch.tensor([10.0, 0.0, 5.0], device=device), torch.diag(torch.ones(3, device=device))
         )
         self.init_state = torch.tensor([0.0, 0.0], device=device)
-        self.diffusion_vector = torch.tensor([0.0, 0.1], device=device)
+        self.diffusion_vector = torch.tensor([0.0, 1e-1], device=device)
         self.cov = torch.diag(self.diffusion_vector ** 2 * self.dt + 1e-8)
 
     def ode(self, x, u, theta):
@@ -219,7 +219,7 @@ def train_model(
     #######################################################################
     # print("initilize net")
     # design_net.apply(init_weights)
-    pendulum = LinearPendulum(design_net, device)
+    pendulum = LinearPendulum(design_net, device, T)
 
     def separate_learning_rate(module_name, param_name):
         if module_name == "critic_net":
@@ -310,7 +310,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="iDAD: SDE-Based Pendulum Model")
     parser.add_argument("--num-steps", default=50000, type=int)
     parser.add_argument("--num-batch-samples", default=512, type=int)
-    parser.add_argument("--num-negative-samples", default=1023, type=int)
+    parser.add_argument("--num-negative-samples", default=16383, type=int)
     parser.add_argument("--seed", default=-1, type=int)
     parser.add_argument("--lr", default=0.0005, type=float)
     parser.add_argument("--gamma", default=0.96, type=float)

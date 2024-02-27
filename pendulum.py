@@ -1,7 +1,5 @@
 import os
-import pickle
 import argparse
-import math
 
 import pandas as pd
 from tqdm import trange
@@ -16,7 +14,6 @@ import mlflow.pytorch
 from oed.primitives import observation_sample, latent_sample, compute_design
 from experiment_tools.pyro_tools import auto_seed
 from oed.design import OED
-from estimators.bb_mi import InfoNCE, NWJ
 from estimators.mi import PriorContrastiveEstimation
 
 
@@ -35,17 +32,17 @@ class SimplePendulum(nn.Module):
             T
     ):
         super(SimplePendulum, self).__init__()
-        self.p = 2
         self.design_net = design_net
         self.T = T
         self.dt = 0.05
-        self.cov = torch.diag(torch.tensor([1e-8, 5e-4], device=device))
         self.scale = 2.5
         self.shift = 0.0
         self.log_theta_prior = dist.MultivariateNormal(
             torch.tensor([0.0, 0.0], device=device), torch.diag(torch.tensor([0.01, 0.01], device=device))
         )
         self.init_state = torch.tensor([0.0, 0.0], device=device)
+        self.diffusion_vector = torch.tensor([0.0, 1e-1], device=device)
+        self.cov = torch.diag(self.diffusion_vector ** 2 * self.dt + 1e-8)
 
     def ode(self, x, u, theta):
         """
@@ -54,8 +51,12 @@ class SimplePendulum(nn.Module):
         single or batched `x`, `u` and `theta`.
         """
         m, l = [theta[..., [i]] for i in range(2)]
+        g, d = 9.81, 1e-3
         q, dq = x[..., [0]], x[..., [1]]
-        ddq = -9.81 * torch.sin(q) / l + u / (m * l ** 2)
+        ddq = (
+            - 3.0 * g / (2.0 * l) * torch.sin(q)
+            + (u - d * dq) * 3.0 / (m * l ** 2)
+        )
         if dq.size() != ddq.size():
             # Add dimensions to dq
             dq = dq.expand(ddq.size())
@@ -319,7 +320,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="iDAD: SDE-Based Pendulum Model")
     parser.add_argument("--num-steps", default=50000, type=int)
     parser.add_argument("--num-batch-samples", default=512, type=int)
-    parser.add_argument("--num-negative-samples", default=1023, type=int)
+    parser.add_argument("--num-negative-samples", default=16383, type=int)
     parser.add_argument("--seed", default=-1, type=int)
     parser.add_argument("--lr", default=0.0005, type=float)
     parser.add_argument("--gamma", default=0.96, type=float)
