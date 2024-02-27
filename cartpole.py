@@ -35,13 +35,14 @@ class Cartpole(nn.Module):
         self.design_net = design_net
         self.T = T
         self.dt = 0.05
-        self.cov = torch.diag(torch.tensor([1e-8, 1e-8, 5e-4, 1e-8], device=device))
         self.scale = 5.0
         self.shift = 0.0
         self.log_theta_prior = dist.MultivariateNormal(
             torch.zeros(3, device=device), torch.diag((0.01 * torch.ones(3, device=device)))
         )
         self.init_state = torch.zeros(4, device=device)
+        self.diffusion_vector = torch.tensor([0.0, 0.0, 1e-1, 0.0], device=device)
+        self.cov = torch.diag(self.diffusion_vector ** 2 * self.dt + 1e-8)
 
     def ode(self, x, u, theta):
         """
