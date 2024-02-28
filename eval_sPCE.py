@@ -1,7 +1,5 @@
 import os
-import math
 import argparse
-from collections import defaultdict
 
 import pandas as pd
 
@@ -12,7 +10,7 @@ import mlflow
 
 from experiment_tools.pyro_tools import auto_seed
 from experiment_tools.output_utils import get_mlflow_meta
-from estimators.mi import PriorContrastiveEstimation, NestedMonteCarloEstimation
+from estimators.mi import PriorContrastiveEstimation
 
 
 def evaluate_run(
@@ -20,9 +18,10 @@ def evaluate_run(
     run_id,
     num_experiments_to_perform,
     num_inner_samples,
+    num_outer_samples,
+    num_seeds,
     device,
-    n_rollout,
-    seed=-1,
+    seed,
     # if checkpoints were stored (as model_postfix), pass here
     model_postfix="",
 ):
@@ -31,11 +30,8 @@ def evaluate_run(
     model_location = f"{artifact_path}/model{model_postfix}"
     seed = auto_seed(seed)
 
-    factor = 16
-    n_rollout = n_rollout // factor
-
-    EIGs_mean = pd.DataFrame(columns=["lower", "upper"])
-    EIGs_se = pd.DataFrame(columns=["lower", "upper"])
+    EIGs_mean = pd.DataFrame(columns=["lower"])
+    EIGs_se = pd.DataFrame(columns=["lower"])
 
     for t_exp in num_experiments_to_perform:
         # load model, set number of experiments
@@ -45,30 +41,17 @@ def evaluate_run(
         else:
             t_exp = trained_model.T
 
-        pce_loss_upper = NestedMonteCarloEstimation(
-            trained_model.model, factor, num_inner_samples
-        )
         pce_loss_lower = PriorContrastiveEstimation(
-            trained_model.model, factor, num_inner_samples
+            trained_model.model, num_outer_samples, num_inner_samples
         )
 
         auto_seed(seed)
-        EIG_proxy_upper = torch.tensor(
-            [-pce_loss_upper.loss() for _ in range(n_rollout)]
-        )
-        auto_seed(seed)
         EIG_proxy_lower = torch.tensor(
-            [-pce_loss_lower.loss() for _ in range(n_rollout)]
+            [-pce_loss_lower.loss() for _ in range(num_seeds)]
         )
 
         EIGs_mean.loc[t_exp, "lower"] = EIG_proxy_lower.mean().item()
-        EIGs_mean.loc[t_exp, "upper"] = EIG_proxy_upper.mean().item()
-        EIGs_se.loc[t_exp, "lower"] = EIG_proxy_lower.std().item() / math.sqrt(
-            n_rollout
-        )
-        EIGs_se.loc[t_exp, "upper"] = EIG_proxy_upper.std().item() / math.sqrt(
-            n_rollout
-        )
+        EIGs_se.loc[t_exp, "lower"] = EIG_proxy_lower.std().item()
 
     EIGs_mean["stat"] = "mean"
     EIGs_se["stat"] = "se"
@@ -92,11 +75,12 @@ def evaluate_run(
 
 def evaluate_experiment(
     experiment_id,
-    num_experiments_to_perform=[None],
-    num_inner_samples=int(5e5),
-    device="cuda",
-    n_rollout=2048 * 2,
-    seed=-1,
+    seed,
+    num_experiments_to_perform,
+    device,
+    num_inner_samples,
+    num_outer_samples,
+    num_seeds,
     model_postfix="",
 ):
 
@@ -116,9 +100,10 @@ def evaluate_experiment(
             run_id=run_id,
             num_experiments_to_perform=num_experiments_to_perform,
             num_inner_samples=num_inner_samples,
+            num_outer_samples=num_outer_samples,
+            num_seeds=num_seeds,
             device=device,
-            n_rollout=n_rollout,
-            seed=-1,
+            seed=seed,
             model_postfix=model_postfix,
         )
         print("\n")
@@ -131,8 +116,10 @@ if __name__ == "__main__":
     parser.add_argument("--experiment-id", type=str)
     parser.add_argument("--device", default="cuda", type=str)
     parser.add_argument("--seed", default=-1, type=int)
-    parser.add_argument("--n-rollout", default=2048 * 2, type=int)
     parser.add_argument("--num-experiments-to-perform", nargs="+", default=[None])
+    parser.add_argument("--num_inner_samples", default=1_000_000, type=int)
+    parser.add_argument("--num_outer_samples", default=32, type=int)
+    parser.add_argument("--num_seeds", default=16, type=int)
 
     args = parser.parse_args()
     args.num_experiments_to_perform = [
@@ -140,9 +127,10 @@ if __name__ == "__main__":
     ]
     evaluate_experiment(
         experiment_id=args.experiment_id,
-        n_rollout=args.n_rollout,
         seed=args.seed,
-        num_inner_samples=int(1e5),
         num_experiments_to_perform=args.num_experiments_to_perform,
         device=args.device,
+        num_inner_samples=args.num_inner_samples,
+        num_outer_samples=args.num_outer_samples,
+        num_seeds=args.num_seeds
     )
