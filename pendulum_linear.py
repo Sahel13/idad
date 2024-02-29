@@ -35,10 +35,10 @@ class LinearPendulum(nn.Module):
         self.design_net = design_net
         self.T = T
         self.dt = 0.05
-        self.scale = 2.5
+        self.scale = 1.0
         self.shift = 0.0
         self.theta_prior = dist.MultivariateNormal(
-            torch.tensor([10.0, 0.0, 5.0], device=device), torch.diag(torch.ones(3, device=device))
+            torch.tensor([14.0, 0.0, 3.0], device=device), torch.diag(torch.tensor([1.0, 0.01, 0.1], device=device))
         )
         self.init_state = torch.tensor([0.0, 0.0], device=device)
         self.diffusion_vector = torch.tensor([0.0, 1e-1], device=device)
