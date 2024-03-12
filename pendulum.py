@@ -318,7 +318,7 @@ def train_model(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="iDAD: SDE-Based Pendulum Model")
-    parser.add_argument("--num-steps", default=50000, type=int)
+    parser.add_argument("--num-steps", default=10000, type=int)
     parser.add_argument("--num-batch-samples", default=512, type=int)
     parser.add_argument("--num-negative-samples", default=16383, type=int)
     parser.add_argument("--seed", default=-1, type=int)

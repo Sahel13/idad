@@ -117,9 +117,9 @@ if __name__ == "__main__":
     parser.add_argument("--device", default="cuda", type=str)
     parser.add_argument("--seed", default=-1, type=int)
     parser.add_argument("--num-experiments-to-perform", nargs="+", default=[None])
-    parser.add_argument("--num_inner_samples", default=1_000_000, type=int)
-    parser.add_argument("--num_outer_samples", default=32, type=int)
-    parser.add_argument("--num_seeds", default=16, type=int)
+    parser.add_argument("--num_inner_samples", default=1000000, type=int)
+    parser.add_argument("--num_outer_samples", default=16, type=int)
+    parser.add_argument("--num_seeds", default=25, type=int)
 
     args = parser.parse_args()
     args.num_experiments_to_perform = [
