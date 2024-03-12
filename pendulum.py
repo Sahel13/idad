@@ -35,7 +35,7 @@ class SimplePendulum(nn.Module):
         self.design_net = design_net
         self.T = T
         self.dt = 0.05
-        self.scale = 2.5
+        self.scale = 1.0
         self.shift = 0.0
         self.log_theta_prior = dist.MultivariateNormal(
             torch.tensor([0.0, 0.0], device=device), torch.diag(torch.tensor([0.01, 0.01], device=device))
@@ -51,7 +51,7 @@ class SimplePendulum(nn.Module):
         single or batched `x`, `u` and `theta`.
         """
         m, l = [theta[..., [i]] for i in range(2)]
-        g, d = 9.81, 1e-3
+        g, d = 9.81, 1e-1
         q, dq = x[..., [0]], x[..., [1]]
         ddq = (
             - 3.0 * g / (2.0 * l) * torch.sin(q)
