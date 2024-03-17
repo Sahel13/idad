@@ -65,8 +65,8 @@ class DoublePendulum(nn.Module):
 
         # Inertia
         M = torch.tensor([
-            [(m1 + m2) * l1^2 + m2 * l2^2 + 2.0 * m2 * l1 * l2 * c2, m2 * l2^2 + m2 * l1 * l2 * c2],
-            [m2 * l2^2 + m2 * l1 * l2 * c2, m2 * l2^2]
+            [(m1 + m2) * l1**2 + m2 * l2**2 + 2.0 * m2 * l1 * l2 * c2, m2 * l2**2 + m2 * l1 * l2 * c2],
+            [m2 * l2**2 + m2 * l1 * l2 * c2, m2 * l2**2]
         ], device=self.device)
 
         # Coriolis
