@@ -43,7 +43,6 @@ class DoublePendulum(nn.Module):
         self.init_state = torch.zeros(4, device=device)
         self.diffusion_vector = torch.tensor([0.0, 0.0, 1e-1, 1e-1], device=device)
         self.cov = torch.diag(self.diffusion_vector ** 2 * self.dt + 1e-8)
-        self.device = device
 
     def ode(self, x, u, theta):
         """
@@ -63,30 +62,37 @@ class DoublePendulum(nn.Module):
         s2, c2 = torch.sin(q2), torch.cos(q2)
         s12 = torch.sin(q1 + q2)
 
-        # Inertia
-        M = torch.tensor([
-            [(m1 + m2) * l1**2 + m2 * l2**2 + 2.0 * m2 * l1 * l2 * c2, m2 * l2**2 + m2 * l1 * l2 * c2],
-            [m2 * l2**2 + m2 * l1 * l2 * c2, m2 * l2**2]
-        ], device=self.device)
+        # Mass
+        I_1 = m1 * l1**2
+        I_2 = m2 * l2**2
+
+        M_1 = I_1 + I_2 + m2 * l1**2 + 2.0 * m2 * l1 * l2 * c2
+        M_2 = I_2 + m2 * l1 * l2 * c2
+        M_3 = M_2
+        M_4 = I_2
 
         # Coriolis
-        C = torch.tensor([
-            [0.0, -m2 * l1 * l2 * (2.0 * dq1 + dq2) * s2],
-            [0.5 * m2 * l1 * l2 * (2.0 * dq1 + dq2) * s2, -0.5 * m2 * l1 * l2 * dq1 * s2]
-        ], device=self.device)
+        C_1 = 0.0
+        C_2 = -m2 * l1 * l2 * (2.0 * dq1 + dq2) * s2
+        C_3 = 0.5 * m2 * l1 * l2 * (2.0 * dq1 + dq2) * s2
+        C_4 = -0.5 * m2 * l1 * l2 * dq1 * s2
 
         # Gravity
-        tau = -g * torch.tensor([
-            (m1 + m2) * l1 * s1 + m2 * l2 * s12, m2 * l2 * s12
-        ], device=self.device)
+        tau_1 = -g * ((m1 + m2) * l1 * s1 + m2 * l2 * s12)
+        tau_2 = -g * m2 * l2 * s12
 
         u1 = u1 - k1 * dq1
         u2 = u2 - k2 * dq2
-        u = torch.cat([u1, u2], dim=-1)
-        dq = torch.cat([dq1, dq2], dim=-1)
 
-        B = torch.diagonal(torch.tensor([1.0, 1.0], device=self.device))
-        ddq = torch.linalg.inv(M) * (tau + B * u - C * dq)
+        ddq2 = tau_2 + u2 - C_3 * dq1 - C_4 * dq2
+        ddq2 -= M_3 / M_1 * (tau_1 + u1 - C_1 * dq1 - C_2 * dq2)
+        ddq2 /= M_4 - M_3 * M_2 / M_1
+
+        ddq1 = tau_1 + u1 - C_1 * dq1 - C_2 * dq2 - M_2 * ddq2
+        ddq1 /= M_1
+
+        dq = torch.cat([dq1, dq2], dim=-1)
+        ddq = torch.cat([ddq1, ddq2], dim=-1)
 
         if dq.size() != ddq.size():
             # Add dimensions to dq
