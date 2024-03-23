@@ -2,6 +2,26 @@ import torch
 from torch.distributions import MultivariateNormal
 
 
+def inverse_cdf(uniforms, weights):
+    """Inverse CDF sampling."""
+    idx = torch.zeros_like(uniforms, dtype=torch.int64)
+    i = 0
+    cumsum = weights[0]
+    for m in range(len(uniforms)):
+        while uniforms[m] > cumsum:
+            i += 1
+            cumsum += weights[i]
+        idx[m] = i
+    return idx
+
+
+def systematic_resampling(weights):
+    """Systematic resampling."""
+    nb_particles = len(weights)
+    ordered_uniforms = (torch.arange(nb_particles) + torch.rand(1)) / nb_particles
+    return inverse_cdf(ordered_uniforms, weights)
+
+
 def ess(weights):
     """Effective sample size."""
     return 1.0 / torch.sum(torch.square(weights))
@@ -95,12 +115,15 @@ def reweight(t, n, trajectory, dynamics, param_struct):
     param_struct.weights[n] = torch.nn.Softmax(dim=0)(param_struct.log_weights[n])
     return param_struct
 
+
 def ibis_step(t, n, trajectory, dynamics, param_prior, nb_moves, param_struct):
     # Reweight.
     param_struct = reweight(t, n, trajectory, dynamics, param_struct)
     # Resample-move if necessary.
     if ess(param_struct.weights[n]) < 0.75 * param_struct.nb_particles:
-        # TODO: Resample.
+        # Resample.
+        idx = systematic_resampling(param_struct.weights[n])
+        param_struct.particles[n, :, :] = param_struct.particles[n, idx, :]
         # Move.
         param_struct = move(
             t, n, trajectory, dynamics, param_prior, nb_moves, param_struct
