@@ -1,6 +1,6 @@
 import torch
 from torch.distributions import MultivariateNormal, Uniform
-from methods import IBISDynamics, ClosedLoop, iosmc2
+from iosmc import IBISDynamics, ClosedLoop, estimate_eig
 
 
 class Pendulum(IBISDynamics):
@@ -35,4 +35,4 @@ nb_steps = 50
 nb_trajectories = 16
 nb_particles = 1024
 
-out = iosmc2(nb_steps, nb_trajectories, nb_particles, param_prior, init_state, closed_loop)
+estimate = estimate_eig(nb_steps, nb_trajectories, nb_particles, param_prior, init_state, closed_loop)
