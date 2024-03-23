@@ -126,7 +126,7 @@ def estimate_eig(
     param_prior,
     init_state,
     closed_loop: ClosedLoop,
-    nb_moves: int = 3
+    nb_moves: int = 3,
 ):
     # Initialize structs.
     state_struct = StateStruct(init_state, nb_steps, nb_trajectories)
@@ -138,11 +138,11 @@ def estimate_eig(
             param_struct.weights,
             state_struct.trajectories[:, 0 : t + 1, :],
         )
-        # Compute the info gain increment and update.
         for n in range(nb_trajectories):
+            # Compute the info gain increment and update.
             xdim = closed_loop.dynamics.xdim
             x = state_struct.trajectories[n, t, 0:xdim]
-            u = state_struct.trajectories[n, t, xdim:]
+            u = state_struct.trajectories[n, t + 1, xdim:]
             xn = state_struct.trajectories[n, t + 1, 0:xdim]
             state_struct.cumulative_return[
                 n
@@ -151,7 +151,7 @@ def estimate_eig(
             )
 
             # IBIS step.
-            param_struct = ibis_step(
+            ibis_step(
                 t,
                 n,
                 state_struct.trajectories[n, 0 : t + 2, :],

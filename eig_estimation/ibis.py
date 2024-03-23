@@ -72,7 +72,6 @@ def accumulate_likelihood(trajectory, particles, dynamics, param_prior):
 
 
 def kernel(t, n, trajectory, dynamics, param_prior, param_struct):
-    prop_particles = None
     if isinstance(param_prior, MultivariateNormal):
         prop_particles = gaussian_proposal_fn(
             param_struct.particles[n], param_struct.weights[n]
@@ -93,13 +92,13 @@ def kernel(t, n, trajectory, dynamics, param_prior, param_struct):
             param_struct.particles[n, m] = prop_particles[m]
             param_struct.log_likelihoods[n, m] = prop_log_likelihood[m]
 
-    return param_struct
+    return None
 
 
 def move(t, n, trajectory, dynamics, param_prior, nb_moves, param_struct):
     for _ in range(nb_moves):
-        param_struct = kernel(t, n, trajectory, dynamics, param_prior, param_struct)
-    return param_struct
+        kernel(t, n, trajectory, dynamics, param_prior, param_struct)
+    return None
 
 
 def reweight(t, n, trajectory, dynamics, param_struct):
@@ -113,19 +112,22 @@ def reweight(t, n, trajectory, dynamics, param_struct):
     param_struct.log_weights[n] += log_weight_increments
     param_struct.log_likelihoods[n] += log_weight_increments
     param_struct.weights[n] = torch.nn.Softmax(dim=0)(param_struct.log_weights[n])
-    return param_struct
+    return None
 
 
 def ibis_step(t, n, trajectory, dynamics, param_prior, nb_moves, param_struct):
     # Reweight.
-    param_struct = reweight(t, n, trajectory, dynamics, param_struct)
-    # Resample-move if necessary.
+    reweight(t, n, trajectory, dynamics, param_struct)
+
     if ess(param_struct.weights[n]) < 0.75 * param_struct.nb_particles:
         # Resample.
         idx = systematic_resampling(param_struct.weights[n])
         param_struct.particles[n, :, :] = param_struct.particles[n, idx, :]
+        param_struct.weights[n] = torch.ones(param_struct.nb_particles) / param_struct.nb_particles
+        param_struct.log_weights[n] = torch.zeros(param_struct.nb_particles)
+        param_struct.log_likelihoods[n] = param_struct.log_likelihoods[n, idx]
         # Move.
-        param_struct = move(
+        move(
             t, n, trajectory, dynamics, param_prior, nb_moves, param_struct
         )
-    return param_struct
+    return None
