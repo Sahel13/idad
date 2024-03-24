@@ -64,9 +64,9 @@ def lognormal_proposal_fn(particles, weights):
 def accumulate_likelihood(trajectory, particles, dynamics, param_prior):
     lls = param_prior.log_prob(particles)
     for t in range(trajectory.shape[0] - 1):
-        x = trajectory[t, 0 : dynamics.xdim]
+        x = trajectory[t, : dynamics.xdim]
         u = trajectory[t + 1, dynamics.xdim :]
-        xn = trajectory[t + 1, 0 : dynamics.xdim]
+        xn = trajectory[t + 1, : dynamics.xdim]
         lls += dynamics.conditional_logpdf(particles, x, u, xn)
     return lls
 
@@ -105,9 +105,9 @@ def reweight(t, n, trajectory, dynamics, param_struct):
     # Get the log weight increments.
     log_weight_increments = dynamics.conditional_logpdf(
         param_struct.particles[n],
-        trajectory[t, 0 : dynamics.xdim],
+        trajectory[t, : dynamics.xdim],
         trajectory[t + 1, dynamics.xdim :],
-        trajectory[t + 1, 0 : dynamics.xdim],
+        trajectory[t + 1, : dynamics.xdim],
     )
     param_struct.log_weights[n] += log_weight_increments
     param_struct.log_likelihoods[n] += log_weight_increments
@@ -123,11 +123,11 @@ def ibis_step(t, n, trajectory, dynamics, param_prior, nb_moves, param_struct):
         # Resample.
         idx = systematic_resampling(param_struct.weights[n])
         param_struct.particles[n, :, :] = param_struct.particles[n, idx, :]
-        param_struct.weights[n] = torch.ones(param_struct.nb_particles) / param_struct.nb_particles
+        param_struct.weights[n] = (
+            torch.ones(param_struct.nb_particles) / param_struct.nb_particles
+        )
         param_struct.log_weights[n] = torch.zeros(param_struct.nb_particles)
         param_struct.log_likelihoods[n] = param_struct.log_likelihoods[n, idx]
         # Move.
-        move(
-            t, n, trajectory, dynamics, param_prior, nb_moves, param_struct
-        )
+        move(t, n, trajectory, dynamics, param_prior, nb_moves, param_struct)
     return None
