@@ -44,4 +44,4 @@ if __name__ == "__main__":
 
     mean_estimate = eig_estimates.mean()
     std_estimate = eig_estimates.std()
-    print(r"EIG estimate: {:.4f} $\pm$ {:.4f}".format(mean_estimate, std_estimate))
+    print(r"EIG estimate: {:.4f} pm {:.4f}".format(mean_estimate, std_estimate))

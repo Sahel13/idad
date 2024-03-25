@@ -33,11 +33,15 @@ class ParamStruct:
         self.nb_particles = nb_particles
         param_dim = len(param_prior.loc)
         self.particles = torch.zeros(nb_trajectories, nb_particles, param_dim)
-        for n in range(nb_trajectories):
-            self.particles[n, :, :] = param_prior.sample((nb_particles,))
         self.weights = torch.ones(nb_trajectories, nb_particles) / nb_particles
         self.log_weights = torch.zeros(nb_trajectories, nb_particles)
         self.log_likelihoods = torch.zeros(nb_trajectories, nb_particles)
+
+        for n in range(nb_trajectories):
+            self.particles[n, :, :] = param_prior.sample((nb_particles,))
+            self.log_likelihoods[n, :] = self.param_prior.log_prob(
+                self.particles[n, :, :]
+            )
 
 
 class IBISDynamics:
@@ -100,13 +104,15 @@ class ClosedLoop:
         # Sample actions first.
         # TODO: This needs to be checked, the action might need to be the first input variable.
         # us = self.policy.lazy(trajectories)
-        untransformed_us = self.policy(trajectories)
-        us = self.transform_designs(untransformed_us)
+        # untransformed_us = self.policy(trajectories)
+        # us = self.transform_designs(untransformed_us)
+        us = self.policy(trajectories)
         # Sample states.
         xs = trajectories[:, -1, 0 : self.dynamics.xdim]
         xns = self.dynamics.conditional_sample(ps, xs, us)
         # iDAD policies take the untransformed designs as input.
-        return torch.cat((xns, untransformed_us), dim=-1)
+        # return torch.cat((xns, untransformed_us), dim=-1)
+        return torch.cat((xns, us), dim=-1)
 
     def sample_marginal(self, ps, ws, trajectories):
         nb_trajectories, _, param_dim = ps.shape
