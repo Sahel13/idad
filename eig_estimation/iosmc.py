@@ -100,18 +100,21 @@ class ClosedLoop:
     def transform_designs(self, xi_untransformed):
         return self.shift + self.scale * torch.nn.Tanh()(xi_untransformed)
 
+    def inverse_transform_designs(self, xi):
+        return torch.arctanh((xi - self.shift) / self.scale)
+
     def sample_conditional(self, ps, trajectories):
         # Sample actions first.
-        list = [(trajectories[:, t, self.dynamics.xdim :], trajectories[:, t, : self.dynamics.xdim]) for t in range(trajectories.shape[1])]
-        untransformed_us = self.policy(*list)
-        us = self.transform_designs(untransformed_us)
-        # us = self.policy(trajectories)
-        # Sample states.
+        list = [(self.inverse_transform_designs(trajectories[:, t, self.dynamics.xdim :]), trajectories[:, t, : self.dynamics.xdim]) for t in range(trajectories.shape[1])]
+        with torch.no_grad():
+            untransformed_us = self.policy(*list)
+            us = self.transform_designs(untransformed_us)
+            # us = self.policy(trajectories)
+            # Sample states.
         xs = trajectories[:, -1, 0 : self.dynamics.xdim]
         xns = self.dynamics.conditional_sample(ps, xs, us)
         # iDAD policies take the untransformed designs as input.
-        return torch.cat((xns, untransformed_us), dim=-1)
-        # return torch.cat((xns, us), dim=-1)
+        return torch.cat((xns, us), dim=-1)
 
     def sample_marginal(self, ps, ws, trajectories):
         nb_trajectories, _, param_dim = ps.shape
