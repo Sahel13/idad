@@ -31,8 +31,17 @@ if __name__ == "__main__":
         torch.tensor([14.7, 0.0, 3.0]), torch.diag(torch.tensor([0.1, 0.01, 0.1]))
     )
     init_state = torch.zeros(3)
+    nb_runs = 25
     nb_steps = 50
     nb_trajectories = 16
-    nb_particles = 128
+    nb_particles = 1024
 
-    estimate = estimate_eig(nb_steps, nb_trajectories, nb_particles, param_prior, init_state, closed_loop)
+    eig_estimates = torch.zeros(nb_runs)
+    for i in range(nb_runs):
+        estimate = estimate_eig(nb_steps, nb_trajectories, nb_particles, param_prior, init_state, closed_loop)
+        eig_estimates[i] = estimate
+        print(f"Run {i}: {estimate:.4f}")
+
+    mean_estimate = eig_estimates.mean()
+    std_estimate = eig_estimates.std()
+    print(r"EIG estimate: {:.4f} $\pm$ {:.4f}".format(mean_estimate, std_estimate))

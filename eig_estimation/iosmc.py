@@ -1,6 +1,5 @@
 import torch
 from torch.distributions import MultivariateNormal, Categorical
-from neural.aggregators import LSTMImplicitDAD
 from ibis import ibis_step
 
 
