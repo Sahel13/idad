@@ -12,10 +12,9 @@ class MultivariateLogNormal:
     def sample(self, shape):
         return torch.exp(self.log_dist.sample(shape))
 
-    # TODO: Verify if this is correct.
     def log_prob(self, x):
         return self.log_dist.log_prob(torch.log(x)) / torch.prod(
-            x, dim=-1, keepdim=True
+            x, dim=-1, keepdim=False
         )
 
 
