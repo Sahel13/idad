@@ -101,11 +101,21 @@ class ClosedLoop:
         return self.shift + self.scale * torch.nn.Tanh()(xi_untransformed)
 
     def inverse_transform_designs(self, xi):
-        return torch.arctanh((xi - self.shift) / self.scale)
+        return torch.arctanh(
+            torch.clamp((xi - self.shift) / self.scale, min=-0.9999, max=0.9999)
+        )
 
     def sample_conditional(self, ps, trajectories):
         # Sample actions first.
-        list = [(self.inverse_transform_designs(trajectories[:, t, self.dynamics.xdim :]), trajectories[:, t, : self.dynamics.xdim]) for t in range(trajectories.shape[1])]
+        list = [
+            (
+                self.inverse_transform_designs(
+                    trajectories[:, t, self.dynamics.xdim :]
+                ),
+                trajectories[:, t, : self.dynamics.xdim],
+            )
+            for t in range(trajectories.shape[1])
+        ]
         with torch.no_grad():
             untransformed_us = self.policy(*list)
             us = self.transform_designs(untransformed_us)

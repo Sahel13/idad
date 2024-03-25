@@ -33,7 +33,9 @@ if __name__ == "__main__":
 
     # Load the trained policy.
     filter_string = "params.status='complete'"
-    meta = get_mlflow_meta(experiment_id=args.experiment_id, filter_string=filter_string)
+    meta = get_mlflow_meta(
+        experiment_id=args.experiment_id, filter_string=filter_string
+    )
     experiment_run_ids = [run.info.run_id for run in meta]
     run_id = experiment_run_ids[0]
     artifact_path = f"mlruns/{args.experiment_id}/{run_id}/artifacts"
@@ -55,7 +57,14 @@ if __name__ == "__main__":
 
     eig_estimates = torch.zeros(nb_runs)
     for i in range(nb_runs):
-        estimate = estimate_eig(nb_steps, nb_trajectories, nb_particles, param_prior, init_state, closed_loop)
+        estimate = estimate_eig(
+            nb_steps,
+            nb_trajectories,
+            nb_particles,
+            param_prior,
+            init_state,
+            closed_loop,
+        )
         eig_estimates[i] = estimate
         print(f"Run {i}: {estimate:.4f}")
 
