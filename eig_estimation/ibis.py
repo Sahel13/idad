@@ -9,8 +9,11 @@ def inverse_cdf(uniforms, weights):
     cumsum = weights[0]
     for m in range(len(uniforms)):
         while uniforms[m] > cumsum:
-            i += 1
-            cumsum += weights[i]
+            if i < len(weights) - 1:
+                i += 1
+                cumsum += weights[i]
+            else:
+                break
         idx[m] = i
     return idx
 
