@@ -3,7 +3,7 @@ import mlflow
 from experiment_tools.output_utils import get_mlflow_meta
 
 
-experiment_id = ""
+experiment_id = "662309667546441219"
 filter_string = "params.status='complete'"
 meta = get_mlflow_meta(experiment_id=experiment_id, filter_string=filter_string)
 experiment_run_ids = [run.info.run_id for run in meta]
