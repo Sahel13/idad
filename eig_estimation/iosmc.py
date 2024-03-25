@@ -1,6 +1,6 @@
 import torch
 from torch.distributions import MultivariateNormal, Categorical
-from ibis import ibis_step
+from eig_estimation.ibis import ibis_step
 
 
 class MultivariateLogNormal:
@@ -102,17 +102,16 @@ class ClosedLoop:
 
     def sample_conditional(self, ps, trajectories):
         # Sample actions first.
-        # TODO: This needs to be checked, the action might need to be the first input variable.
-        # us = self.policy.lazy(trajectories)
-        # untransformed_us = self.policy(trajectories)
-        # us = self.transform_designs(untransformed_us)
-        us = self.policy(trajectories)
+        list = [(trajectories[:, t, self.dynamics.xdim :], trajectories[:, t, : self.dynamics.xdim]) for t in range(trajectories.shape[1])]
+        untransformed_us = self.policy(*list)
+        us = self.transform_designs(untransformed_us)
+        # us = self.policy(trajectories)
         # Sample states.
         xs = trajectories[:, -1, 0 : self.dynamics.xdim]
         xns = self.dynamics.conditional_sample(ps, xs, us)
         # iDAD policies take the untransformed designs as input.
-        # return torch.cat((xns, untransformed_us), dim=-1)
-        return torch.cat((xns, us), dim=-1)
+        return torch.cat((xns, untransformed_us), dim=-1)
+        # return torch.cat((xns, us), dim=-1)
 
     def sample_marginal(self, ps, ws, trajectories):
         nb_trajectories, _, param_dim = ps.shape
