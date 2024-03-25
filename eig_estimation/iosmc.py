@@ -5,9 +5,9 @@ from eig_estimation.ibis import ibis_step
 
 class MultivariateLogNormal:
     def __init__(self, mean_vector, covariance_matrix):
-        self.mean = mean_vector
-        self.cov = covariance_matrix
-        self.log_dist = MultivariateNormal(self.mean, self.cov)
+        self.loc = mean_vector
+        self.covariance_matrix = covariance_matrix
+        self.log_dist = MultivariateNormal(self.loc, self.covariance_matrix)
 
     def sample(self, shape):
         return torch.exp(self.log_dist.sample(shape))
