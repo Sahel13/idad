@@ -3,7 +3,7 @@ from torch.distributions import MultivariateNormal, Uniform
 from iosmc import IBISDynamics, ClosedLoop, estimate_eig
 
 
-class Pendulum(IBISDynamics):
+class LinearPendulum(IBISDynamics):
     def __init__(self):
         xdim = 2
         udim = 1
@@ -25,7 +25,7 @@ def random_policy(trajectories):
 
 if __name__ == "__main__":
     scale, shift = 1.0, 0.0
-    closed_loop = ClosedLoop(Pendulum(), random_policy, scale, shift)
+    closed_loop = ClosedLoop(LinearPendulum(), random_policy, scale, shift)
 
     param_prior = MultivariateNormal(
         torch.tensor([14.7, 0.0, 3.0]), torch.diag(torch.tensor([0.1, 0.01, 0.1]))
