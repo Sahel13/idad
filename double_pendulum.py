@@ -21,10 +21,6 @@ from neural.modules import Mlp
 from neural.aggregators import LSTMImplicitDAD
 
 class DoublePendulum(nn.Module):
-    """
-    Class for the SDE version of the simple pendulum.
-    Data is generated on the fly.
-    """
     def __init__(
             self,
             design_net,
@@ -45,11 +41,6 @@ class DoublePendulum(nn.Module):
         self.cov = torch.diag(self.diffusion_vector ** 2 * self.dt + 1e-8)
 
     def ode(self, x, u, theta):
-        """
-        ODE of the simple pendulum.
-        Should be able to deal with any permutation of
-        single or batched `x`, `u` and `theta`.
-        """
         m1, m2, l1, l2 = [theta[..., [i]] for i in range(4)]
         k1, k2 = 1e-1, 1e-1
 
@@ -107,7 +98,6 @@ class DoublePendulum(nn.Module):
         return self.shift + self.scale * nn.Tanh()(xi_untransformed)
 
     def model(self):
-        # Not sure what this does.
         if hasattr(self.design_net, "parameters"):
             pyro.module("design_net", self.design_net)
 
@@ -361,7 +351,7 @@ if __name__ == "__main__":
     parser.add_argument("--seed", default=-1, type=int)
     parser.add_argument("--lr", default=0.0005, type=float)
     parser.add_argument("--gamma", default=0.96, type=float)
-    parser.add_argument("--device", default="cuda:1", type=str)
+    parser.add_argument("--device", default="cuda", type=str)
     parser.add_argument("--num-experiments", default=50, type=int)
     parser.add_argument("--hidden-dim", default=256, type=int)
     parser.add_argument("--encoding-dim", default=64, type=int)

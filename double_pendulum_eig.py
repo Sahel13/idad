@@ -1,13 +1,9 @@
 import torch
-from eig_estimation.iosmc import (
-    IBISDynamics,
-    ClosedLoop,
-    estimate_eig,
-    MultivariateLogNormal,
-)
+from eig_estimation.iosmc import IBISDynamics, ClosedLoop, estimate_eig
 import argparse
 import mlflow
 from experiment_tools.output_utils import get_mlflow_meta
+from torch.distributions import LogNormal, Independent
 
 
 torch.manual_seed(123)
@@ -86,8 +82,8 @@ if __name__ == "__main__":
     scale, shift = torch.tensor([4.0, 2.0]), torch.zeros(2)
     closed_loop = ClosedLoop(DoublePendulum(), idad_policy, scale, shift)
 
-    param_prior = MultivariateLogNormal(
-        torch.zeros(4), torch.diag(torch.tensor([0.01, 0.01, 0.01, 0.01]))
+    param_prior = Independent(
+        LogNormal(torch.zeros(4), torch.tensor([0.1, 0.1, 0.1, 0.1])), 1
     )
     init_state = torch.zeros(6)
     nb_runs = 25
@@ -110,4 +106,4 @@ if __name__ == "__main__":
 
     mean_estimate = eig_estimates.mean()
     std_estimate = eig_estimates.std()
-    print(r"EIG estimate: {:.4f} pm {:.4f}".format(mean_estimate, std_estimate))
+    print(r"EIG estimate: {:.2f} pm {:.2f}".format(mean_estimate, std_estimate))
