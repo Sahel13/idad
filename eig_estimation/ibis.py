@@ -30,37 +30,32 @@ def ess(weights):
     return 1.0 / torch.sum(torch.square(weights))
 
 
-def cov(tensor, rowvar=True, weights=None):
-    """Empirical covariance of weighted samples."""
-    tensor = tensor if rowvar else tensor.transpose(-1, -2)
-
-    if weights is None:
-        w_sum = tensor.shape[-1]
-        mean = tensor.mean(dim=-1, keepdim=True)
-    else:
-        w_sum = weights.sum(dim=-1, keepdim=True)
-        mean = (weights * tensor).sum(dim=-1, keepdim=True) / w_sum
-
-    fact = 1 / w_sum
-    tensor = tensor - mean
-    return fact * tensor @ tensor.transpose(-1, -2)
+def cov(tensor, weights):
+    """
+    Empirical covariance of weighted samples.
+    """
+    fact = 1 / weights.sum()
+    emp_mean = fact * torch.einsum("i, id->d", weights, tensor)
+    diff = tensor - emp_mean
+    emp_cov = torch.einsum("i, id, ik -> dk", weights, diff, diff)
+    return fact * emp_cov
 
 
 def gaussian_proposal_fn(particles, weights):
-    covar = cov(particles, rowvar=False, weights=weights)
+    covar = cov(particles, weights=weights)
     eig_vals, eig_vecs = torch.symeig(covar, eigenvectors=True)
     sqrt_eig_vals = torch.sqrt(torch.maximum(eig_vals, torch.tensor(1e-8)))
     sqrt_covar = eig_vecs @ torch.diag(sqrt_eig_vals)
-    return particles + torch.randn_like(particles) @ sqrt_covar
+    return particles + torch.randn_like(particles) @ sqrt_covar.T
 
 
 def lognormal_proposal_fn(particles, weights):
     log_particles = torch.log(particles)
-    covar = cov(log_particles, rowvar=False, weights=weights)
+    covar = cov(log_particles, weights=weights)
     eig_vals, eig_vecs = torch.symeig(covar, eigenvectors=True)
     sqrt_eig_vals = torch.sqrt(torch.maximum(eig_vals, torch.tensor(1e-8)))
     sqrt_covar = eig_vecs @ torch.diag(sqrt_eig_vals)
-    log_particles += torch.randn_like(log_particles) @ sqrt_covar
+    log_particles += torch.randn_like(log_particles) @ sqrt_covar.T
     return torch.exp(log_particles)
 
 
@@ -74,19 +69,18 @@ def accumulate_likelihood(trajectory, particles, dynamics, param_prior):
     return lls
 
 
-def kernel(t, n, trajectory, dynamics, param_prior, param_struct):
-    if isinstance(param_prior, MultivariateNormal):
+def kernel(n, trajectory, dynamics, param_struct):
+    if isinstance(param_struct.param_prior, MultivariateNormal):
         prop_particles = gaussian_proposal_fn(
             param_struct.particles[n], param_struct.weights[n]
         )
     else:
-        # This is for MultivariateLogNormal.
         prop_particles = lognormal_proposal_fn(
             param_struct.particles[n], param_struct.weights[n]
         )
 
     prop_log_likelihood = accumulate_likelihood(
-        trajectory, prop_particles, dynamics, param_prior
+        trajectory, prop_particles, dynamics, param_struct.param_prior
     )
     log_rvs = torch.log(torch.rand(param_struct.nb_particles))
 
@@ -98,9 +92,9 @@ def kernel(t, n, trajectory, dynamics, param_prior, param_struct):
     return None
 
 
-def move(t, n, trajectory, dynamics, param_prior, nb_moves, param_struct):
+def move(n, trajectory, dynamics, nb_moves, param_struct):
     for _ in range(nb_moves):
-        kernel(t, n, trajectory, dynamics, param_prior, param_struct)
+        kernel(n, trajectory, dynamics, param_struct)
     return None
 
 
@@ -118,7 +112,7 @@ def reweight(t, n, trajectory, dynamics, param_struct):
     return None
 
 
-def ibis_step(t, n, trajectory, dynamics, param_prior, nb_moves, param_struct):
+def ibis_step(t, n, trajectory, dynamics, nb_moves, param_struct):
     # Reweight.
     reweight(t, n, trajectory, dynamics, param_struct)
 
@@ -132,5 +126,5 @@ def ibis_step(t, n, trajectory, dynamics, param_prior, nb_moves, param_struct):
         param_struct.log_weights[n] = torch.zeros(param_struct.nb_particles)
         param_struct.log_likelihoods[n] = param_struct.log_likelihoods[n, idx]
         # Move.
-        move(t, n, trajectory, dynamics, param_prior, nb_moves, param_struct)
+        move(n, trajectory, dynamics, nb_moves, param_struct)
     return None

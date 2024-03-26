@@ -3,21 +3,6 @@ from torch.distributions import MultivariateNormal, Categorical
 from eig_estimation.ibis import ibis_step
 
 
-class MultivariateLogNormal:
-    def __init__(self, mean_vector, covariance_matrix):
-        self.loc = mean_vector
-        self.covariance_matrix = covariance_matrix
-        self.log_dist = MultivariateNormal(self.loc, self.covariance_matrix, validate_args=False)
-
-    def sample(self, shape):
-        return torch.exp(self.log_dist.sample(shape))
-
-    def log_prob(self, x):
-        return self.log_dist.log_prob(torch.log(x)) / torch.prod(
-            x, dim=-1, keepdim=False
-        )
-
-
 class StateStruct:
     def __init__(self, init_state, nb_steps, nb_trajectories):
         self.state_dim = init_state.shape[0]
@@ -30,7 +15,7 @@ class ParamStruct:
     def __init__(self, param_prior, nb_particles, nb_trajectories):
         self.param_prior = param_prior
         self.nb_particles = nb_particles
-        param_dim = len(param_prior.loc)
+        param_dim = param_prior.event_shape[0]
         self.particles = torch.zeros(nb_trajectories, nb_particles, param_dim)
         self.weights = torch.ones(nb_trajectories, nb_particles) / nb_particles
         self.log_weights = torch.zeros(nb_trajectories, nb_particles)
@@ -54,7 +39,7 @@ class IBISDynamics:
             scale_tril=torch.diag(
                 torch.sqrt(torch.square(self.diffusion_vector) * self.step + 1e-8)
             ),
-            validate_args=False
+            validate_args=False,
         )
 
     def drift_fn(self, p, x, u):
@@ -81,9 +66,9 @@ class IBISDynamics:
 
     def info_gain_increment(self, ps, lws, x, u, xn):
         lls = self.conditional_logpdf(ps, x, u, xn)
-        mod_lws = torch.nn.Softmax(dim=0)(lws + lls)
+        mod_ws = torch.nn.Softmax(dim=0)(lws + lls)
         return (
-            torch.dot(mod_lws, lls)
+            torch.dot(mod_ws, lls)
             - torch.logsumexp(lls + lws, dim=0)
             + torch.logsumexp(lws, dim=0)
         )
@@ -119,20 +104,18 @@ class ClosedLoop:
         with torch.no_grad():
             untransformed_us = self.policy(*list)
             us = self.transform_designs(untransformed_us)
-            print(us)
-            # us = self.policy(trajectories)
-            # Sample states.
+
+        # Sample states.
         xs = trajectories[:, -1, 0 : self.dynamics.xdim]
         xns = self.dynamics.conditional_sample(ps, xs, us)
-        # iDAD policies take the untransformed designs as input.
         return torch.cat((xns, us), dim=-1)
 
     def sample_marginal(self, ps, ws, trajectories):
         nb_trajectories, _, param_dim = ps.shape
         resampled_ps = torch.zeros(nb_trajectories, param_dim)
         for n in range(nb_trajectories):
-            idx = Categorical(ws[n]).sample()
-            resampled_ps[n] = ps[n, idx, :]
+            idx = Categorical(ws[n]).sample().item()
+            resampled_ps[n] = ps[n, idx]
 
         return self.sample_conditional(resampled_ps, trajectories)
 
@@ -174,9 +157,10 @@ def estimate_eig(
                 n,
                 state_struct.trajectories[n, 0 : t + 2, :],
                 closed_loop.dynamics,
-                param_prior,
                 nb_moves,
                 param_struct,
             )
-        print("Step: ", t, "Return: ", torch.mean(state_struct.cumulative_return))
-    return torch.mean(state_struct.cumulative_return)
+        print(
+            f"Step: {t}, Return: {torch.mean(state_struct.cumulative_return).item():.2f}"
+        )
+    return torch.mean(state_struct.cumulative_return).item()
