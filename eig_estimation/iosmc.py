@@ -7,7 +7,7 @@ class MultivariateLogNormal:
     def __init__(self, mean_vector, covariance_matrix):
         self.loc = mean_vector
         self.covariance_matrix = covariance_matrix
-        self.log_dist = MultivariateNormal(self.loc, self.covariance_matrix)
+        self.log_dist = MultivariateNormal(self.loc, self.covariance_matrix, validate_args=False)
 
     def sample(self, shape):
         return torch.exp(self.log_dist.sample(shape))
@@ -54,6 +54,7 @@ class IBISDynamics:
             scale_tril=torch.diag(
                 torch.sqrt(torch.square(self.diffusion_vector) * self.step + 1e-8)
             ),
+            validate_args=False
         )
 
     def drift_fn(self, p, x, u):
@@ -90,7 +91,7 @@ class IBISDynamics:
 
 class ClosedLoop:
     # def __init__(self, dynamics: IBISDynamics, policy: LSTMImplicitDAD):
-    def __init__(self, dynamics: IBISDynamics, policy, scale: float, shift: float):
+    def __init__(self, dynamics: IBISDynamics, policy, scale, shift):
         self.dynamics = dynamics
         self.policy = policy
         self.scale = scale
@@ -101,7 +102,7 @@ class ClosedLoop:
 
     def inverse_transform_designs(self, xi):
         return torch.arctanh(
-            torch.clamp((xi - self.shift) / self.scale, min=-0.9999, max=0.9999)
+            torch.clamp((xi - self.shift) / self.scale, min=-0.99999, max=0.99999)
         )
 
     def sample_conditional(self, ps, trajectories):
@@ -118,6 +119,7 @@ class ClosedLoop:
         with torch.no_grad():
             untransformed_us = self.policy(*list)
             us = self.transform_designs(untransformed_us)
+            print(us)
             # us = self.policy(trajectories)
             # Sample states.
         xs = trajectories[:, -1, 0 : self.dynamics.xdim]
