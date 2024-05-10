@@ -1,12 +1,18 @@
-import torch
-from torch.distributions import MultivariateNormal, Uniform
-from eig_estimation.iosmc import IBISDynamics, ClosedLoop, estimate_eig
 import argparse
+
 import mlflow
+import torch
+
+from eig_estimation.iosmc import (
+    ClosedLoop,
+    IBISDynamics,
+    MultivariateLogNormal,
+    estimate_eig,
+)
 from experiment_tools.output_utils import get_mlflow_meta
 
 
-class LinearPendulum(IBISDynamics):
+class Pendulum(IBISDynamics):
     def __init__(self):
         xdim = 2
         udim = 1
@@ -15,15 +21,11 @@ class LinearPendulum(IBISDynamics):
         super().__init__(xdim, udim, step, diffusion_vector)
 
     def drift_fn(self, p, x, u):
-        p1, p2, p3 = p
+        m, l = p
+        g, d = 9.81, 1e-1
         q, dq = x
-        ddq = -torch.sin(q) * p1 - dq * p2 + u * p3
+        ddq = -3.0 * g / (2.0 * l) * torch.sin(q) + (u - d * dq) * 3.0 / (m * l**2)
         return torch.tensor([dq, ddq])
-
-
-# def random_policy(trajectories):
-#     nb_trajectories = trajectories.shape[0]
-#     return Uniform(-1.0, 1.0).sample((nb_trajectories,1))
 
 
 if __name__ == "__main__":
@@ -44,10 +46,10 @@ if __name__ == "__main__":
     idad_policy = trained_model.design_net
 
     scale, shift = 1.0, 0.0
-    closed_loop = ClosedLoop(LinearPendulum(), idad_policy, scale, shift)
+    closed_loop = ClosedLoop(Pendulum(), idad_policy, scale, shift)
 
-    param_prior = MultivariateNormal(
-        torch.tensor([14.7, 0.0, 3.0]), torch.diag(torch.tensor([0.1, 0.01, 0.1]))
+    param_prior = MultivariateLogNormal(
+        torch.zeros(2), torch.diag(torch.tensor([0.01, 0.01]))
     )
     init_state = torch.zeros(3)
     nb_runs = 25

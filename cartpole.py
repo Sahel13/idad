@@ -1,36 +1,26 @@
-import os
 import argparse
+import os
 
-import pandas as pd
-from tqdm import trange
-import torch
-import torch.nn as nn
-import pyro
-from pyro.infer.util import torch_item
-import pyro.distributions as dist
 import mlflow
 import mlflow.pytorch
+import pandas as pd
+import pyro
+import pyro.distributions as dist
+import torch
+import torch.nn as nn
+from pyro.infer.util import torch_item
+from tqdm import trange
 
-from oed.primitives import observation_sample, latent_sample, compute_design
-from experiment_tools.pyro_tools import auto_seed
-from oed.design import OED
 from estimators.mi import PriorContrastiveEstimation
-
-from neural.modules import Mlp
+from experiment_tools.pyro_tools import auto_seed
 from neural.aggregators import LSTMImplicitDAD
+from neural.modules import Mlp
+from oed.design import OED
+from oed.primitives import compute_design, latent_sample, observation_sample
 
 
 class Cartpole(nn.Module):
-    """
-    Class for the SDE version of the cartpole.
-    Data is generated on the fly.
-    """
-    def __init__(
-            self,
-            design_net,
-            device,
-            T
-    ):
+    def __init__(self, design_net, device, T):
         super(Cartpole, self).__init__()
         self.design_net = design_net
         self.T = T
@@ -38,11 +28,12 @@ class Cartpole(nn.Module):
         self.scale = 5.0
         self.shift = 0.0
         self.log_theta_prior = dist.MultivariateNormal(
-            torch.zeros(3, device=device), torch.diag((0.01 * torch.ones(3, device=device)))
+            torch.zeros(3, device=device),
+            torch.diag((0.01 * torch.ones(3, device=device))),
         )
         self.init_state = torch.zeros(4, device=device)
         self.diffusion_vector = torch.tensor([0.0, 0.0, 1e-1, 0.0], device=device)
-        self.cov = torch.diag(self.diffusion_vector ** 2 * self.dt + 1e-8)
+        self.cov = torch.diag(self.diffusion_vector**2 * self.dt + 1e-8)
 
     def ode(self, x, u, theta):
         """
@@ -69,11 +60,11 @@ class Cartpole(nn.Module):
         ) / (mc + mp * sin_q**2)
 
         ddq = (
-           - u * cos_q
-           - mp * l * dq**2 * cos_q * sin_q
-           - (mc + mp) * g * sin_q
-           - (c * ds + k * s) * cos_q
-           - (d * dq + v * q) * cos_q**2 / l
+            -u * cos_q
+            - mp * l * dq**2 * cos_q * sin_q
+            - (mc + mp) * g * sin_q
+            - (c * ds + k * s) * cos_q
+            - (d * dq + v * q) * cos_q**2 / l
         ) / (l * mc + l * mp * sin_q**2)
 
         if dq.size() != ddq.size():
@@ -155,7 +146,10 @@ class Cartpole(nn.Module):
         else:
             log_theta = log_theta.unsqueeze(0).expand(n_trace, *log_theta.shape)
             # dims: [n_trace * number of thetas given, shape of theta]
-            log_theta = log_theta.reshape(-1, *log_theta.shape[2:],)
+            log_theta = log_theta.reshape(
+                -1,
+                *log_theta.shape[2:],
+            )
 
         output = []
         designs, outcomes = self.forward(log_theta)
@@ -189,6 +183,7 @@ class Cartpole(nn.Module):
         self.design_net.train()
         return pd.concat(output), theta.cpu().numpy()
 
+
 def train_model(
     num_steps,
     batch_size,
@@ -200,7 +195,7 @@ def train_model(
     T,
     hidden_dim,
     encoding_dim,
-    mlflow_experiment_name
+    mlflow_experiment_name,
 ):
     pyro.clear_param_store()
 
@@ -209,7 +204,7 @@ def train_model(
     seed = auto_seed(seed)
 
     #####
-    n = 4 # Output dim
+    n = 4  # Output dim
     design_dim = 1
     observation_dim = n
 
@@ -340,7 +335,7 @@ def train_model(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="iDAD: SDE-Based Pendulum Model")
+    parser = argparse.ArgumentParser(description="iDAD: Stochastic Cart-Pole")
     parser.add_argument("--num-steps", default=10000, type=int)
     parser.add_argument("--num-batch-samples", default=512, type=int)
     parser.add_argument("--num-negative-samples", default=16383, type=int)
@@ -365,5 +360,5 @@ if __name__ == "__main__":
         T=args.num_experiments,
         hidden_dim=args.hidden_dim,
         encoding_dim=args.encoding_dim,
-        mlflow_experiment_name=args.mlflow_experiment_name
+        mlflow_experiment_name=args.mlflow_experiment_name,
     )

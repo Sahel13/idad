@@ -1,10 +1,11 @@
-import torch
-from eig_estimation.iosmc import IBISDynamics, ClosedLoop, estimate_eig
 import argparse
-import mlflow
-from experiment_tools.output_utils import get_mlflow_meta
-from torch.distributions import LogNormal, Independent
 
+import mlflow
+import torch
+from torch.distributions import Independent, LogNormal
+
+from eig_estimation.iosmc import ClosedLoop, IBISDynamics, estimate_eig
+from experiment_tools.output_utils import get_mlflow_meta
 
 torch.manual_seed(123)
 
@@ -26,7 +27,7 @@ class DoublePendulum(IBISDynamics):
         q1, q2, dq1, dq2 = x
         u1, u2 = u
 
-        s1, c1 = torch.sin(q1), torch.cos(q1)
+        s1, _ = torch.sin(q1), torch.cos(q1)
         s2, c2 = torch.sin(q2), torch.cos(q2)
         s12 = torch.sin(q1 + q2)
 
@@ -64,7 +65,7 @@ class DoublePendulum(IBISDynamics):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--experiment-id", type=str, default="607477153518912122")
+    parser.add_argument("--experiment-id", type=str)
     args = parser.parse_args()
 
     # Load the trained policy.

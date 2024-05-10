@@ -1,36 +1,26 @@
-import os
 import argparse
+import os
 
-import pandas as pd
-from tqdm import trange
-import torch
-import torch.nn as nn
-import pyro
-from pyro.infer.util import torch_item
-import pyro.distributions as dist
 import mlflow
 import mlflow.pytorch
+import pandas as pd
+import pyro
+import pyro.distributions as dist
+import torch
+import torch.nn as nn
+from pyro.infer.util import torch_item
+from tqdm import trange
 
-from oed.primitives import observation_sample, latent_sample, compute_design
-from experiment_tools.pyro_tools import auto_seed
-from oed.design import OED
 from estimators.mi import PriorContrastiveEstimation
-
-
-from neural.modules import Mlp
+from experiment_tools.pyro_tools import auto_seed
 from neural.aggregators import LSTMImplicitDAD
+from neural.modules import Mlp
+from oed.design import OED
+from oed.primitives import compute_design, latent_sample, observation_sample
+
 
 class LinearPendulum(nn.Module):
-    """
-    Class for the SDE version of the simple pendulum.
-    Data is generated on the fly.
-    """
-    def __init__(
-            self,
-            design_net,
-            device,
-            T
-    ):
+    def __init__(self, design_net, device, T):
         super(LinearPendulum, self).__init__()
         self.design_net = design_net
         self.T = T
@@ -38,11 +28,12 @@ class LinearPendulum(nn.Module):
         self.scale = 1.0
         self.shift = 0.0
         self.theta_prior = dist.MultivariateNormal(
-            torch.tensor([14.7, 0.0, 3.0], device=device), torch.diag(torch.tensor([0.1, 0.01, 0.1], device=device))
+            torch.tensor([14.7, 0.0, 3.0], device=device),
+            torch.diag(torch.tensor([0.1, 0.01, 0.1], device=device)),
         )
         self.init_state = torch.tensor([0.0, 0.0], device=device)
         self.diffusion_vector = torch.tensor([0.0, 1e-1], device=device)
-        self.cov = torch.diag(self.diffusion_vector ** 2 * self.dt + 1e-8)
+        self.cov = torch.diag(self.diffusion_vector**2 * self.dt + 1e-8)
 
     def ode(self, x, u, theta):
         p1, p2, p3 = [theta[..., [i]] for i in range(3)]
@@ -123,7 +114,10 @@ class LinearPendulum(nn.Module):
         else:
             theta = theta.unsqueeze(0).expand(n_trace, *theta.shape)
             # dims: [n_trace * number of thetas given, shape of theta]
-            theta = theta.reshape(-1, *theta.shape[2:],)
+            theta = theta.reshape(
+                -1,
+                *theta.shape[2:],
+            )
 
         output = []
         designs, outcomes = self.forward(theta)
@@ -156,6 +150,7 @@ class LinearPendulum(nn.Module):
         self.design_net.train()
         return pd.concat(output), theta.cpu().numpy()
 
+
 def train_model(
     num_steps,
     batch_size,
@@ -167,7 +162,7 @@ def train_model(
     T,
     hidden_dim,
     encoding_dim,
-    mlflow_experiment_name
+    mlflow_experiment_name,
 ):
     pyro.clear_param_store()
 
@@ -176,7 +171,7 @@ def train_model(
     seed = auto_seed(seed)
 
     #####
-    n = 2 # Output dim
+    n = 2  # Output dim
     design_dim = 1
     observation_dim = n
 
@@ -281,9 +276,7 @@ def train_model(
             mlflow.log_metric("loss", loss_eval, step=i)
             # Check if lr should be decreased.
             scheduler.step(loss_eval)
-            df, latents = pendulum.eval(
-                n_trace=1, theta=test_theta, verbose=False
-            )
+            df, latents = pendulum.eval(n_trace=1, theta=test_theta, verbose=False)
             df["step"] = i
             outputs_history.append(df)
 
@@ -307,7 +300,7 @@ def train_model(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="iDAD: SDE-Based Pendulum Model")
+    parser = argparse.ArgumentParser(description="iDAD: Conditionally-Linear Pendulum")
     parser.add_argument("--num-steps", default=10000, type=int)
     parser.add_argument("--num-batch-samples", default=512, type=int)
     parser.add_argument("--num-negative-samples", default=16383, type=int)
@@ -332,5 +325,5 @@ if __name__ == "__main__":
         device=args.device,
         hidden_dim=args.hidden_dim,
         encoding_dim=args.encoding_dim,
-        mlflow_experiment_name=args.mlflow_experiment_name
+        mlflow_experiment_name=args.mlflow_experiment_name,
     )

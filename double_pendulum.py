@@ -1,32 +1,26 @@
-import os
 import argparse
+import os
 
-import pandas as pd
-from tqdm import trange
-import torch
-import torch.nn as nn
-import pyro
-from pyro.infer.util import torch_item
-import pyro.distributions as dist
 import mlflow
 import mlflow.pytorch
+import pandas as pd
+import pyro
+import pyro.distributions as dist
+import torch
+import torch.nn as nn
+from pyro.infer.util import torch_item
+from tqdm import trange
 
-from oed.primitives import observation_sample, latent_sample, compute_design
-from experiment_tools.pyro_tools import auto_seed
-from oed.design import OED
 from estimators.mi import PriorContrastiveEstimation
-
-
-from neural.modules import Mlp
+from experiment_tools.pyro_tools import auto_seed
 from neural.aggregators import LSTMImplicitDAD
+from neural.modules import Mlp
+from oed.design import OED
+from oed.primitives import compute_design, latent_sample, observation_sample
+
 
 class DoublePendulum(nn.Module):
-    def __init__(
-            self,
-            design_net,
-            device,
-            T
-    ):
+    def __init__(self, design_net, device, T):
         super(DoublePendulum, self).__init__()
         self.design_net = design_net
         self.T = T
@@ -34,11 +28,12 @@ class DoublePendulum(nn.Module):
         self.scale = torch.tensor([4.0, 2.0], device=device)
         self.shift = torch.zeros(2, device=device)
         self.log_theta_prior = dist.MultivariateNormal(
-            torch.zeros(4, device=device), torch.diag(torch.ones(4, device=device) * 0.01)
+            torch.zeros(4, device=device),
+            torch.diag(torch.ones(4, device=device) * 0.01),
         )
         self.init_state = torch.zeros(4, device=device)
         self.diffusion_vector = torch.tensor([0.0, 0.0, 1e-1, 1e-1], device=device)
-        self.cov = torch.diag(self.diffusion_vector ** 2 * self.dt + 1e-8)
+        self.cov = torch.diag(self.diffusion_vector**2 * self.dt + 1e-8)
 
     def ode(self, x, u, theta):
         m1, m2, l1, l2 = [theta[..., [i]] for i in range(4)]
@@ -159,7 +154,10 @@ class DoublePendulum(nn.Module):
         else:
             log_theta = log_theta.unsqueeze(0).expand(n_trace, *log_theta.shape)
             # dims: [n_trace * number of thetas given, shape of theta]
-            log_theta = log_theta.reshape(-1, *log_theta.shape[2:],)
+            log_theta = log_theta.reshape(
+                -1,
+                *log_theta.shape[2:],
+            )
 
         output = []
         designs, outcomes = self.forward(log_theta)
@@ -193,6 +191,7 @@ class DoublePendulum(nn.Module):
         self.design_net.train()
         return pd.concat(output), theta.cpu().numpy()
 
+
 def train_model(
     num_steps,
     batch_size,
@@ -204,7 +203,7 @@ def train_model(
     T,
     hidden_dim,
     encoding_dim,
-    mlflow_experiment_name
+    mlflow_experiment_name,
 ):
     pyro.clear_param_store()
 
@@ -213,7 +212,7 @@ def train_model(
     seed = auto_seed(seed)
 
     #####
-    n = 4 # Output dim
+    n = 4  # Output dim
     design_dim = 2
     observation_dim = n
 
@@ -344,7 +343,7 @@ def train_model(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="iDAD: SDE-Based Double Pendulum Model")
+    parser = argparse.ArgumentParser(description="iDAD: Double Pendulum")
     parser.add_argument("--num-steps", default=10000, type=int)
     parser.add_argument("--num-batch-samples", default=512, type=int)
     parser.add_argument("--num-negative-samples", default=16383, type=int)
@@ -369,5 +368,5 @@ if __name__ == "__main__":
         T=args.num_experiments,
         hidden_dim=args.hidden_dim,
         encoding_dim=args.encoding_dim,
-        mlflow_experiment_name=args.mlflow_experiment_name
+        mlflow_experiment_name=args.mlflow_experiment_name,
     )

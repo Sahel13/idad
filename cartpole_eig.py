@@ -49,7 +49,7 @@ class CartPole(IBISDynamics):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--experiment-id", type=str, default="694485179914021738")
+    parser.add_argument("--experiment-id", type=str)
     args = parser.parse_args()
 
     # Load the trained policy.
